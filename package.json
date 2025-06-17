@@ -1,0 +1,22 @@
+{
+  "name": "@uncompadev/auth-validation",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "description": "Una librería para validar tokens JWT en aplicaciones NestJS.",
+  "author": "Santiago Mosquera",
+  "license": "MIT",
+  "dependencies": {
+    "@nestjs/common": "^8.0.0",
+    "@nestjs/core": "^8.0.0",
+    "@nestjs/jwt": "^8.0.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.lib.json"
+  },
+  "keywords": [
+    "nestjs",
+    "jwt",
+    "authentication",
+    "validation"
+  ]
+}
