@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "dist/index.js",
   "description": "Una librería para validar tokens JWT en aplicaciones NestJS.",
-  "author": "Santiago Mosquera",
+  "author": "UnCompaDev",
   "license": "MIT",
   "dependencies": {
     "@nestjs/common": "^8.0.0",
