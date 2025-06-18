@@ -38,74 +38,24 @@ var __setFunctionName = (this && this.__setFunctionName) || function (f, name, p
     return Object.defineProperty(f, "name", { configurable: true, value: prefix ? "".concat(prefix, " ", name) : name });
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.JwtAuthGuard = void 0;
-// libs/auth/src/guards/jwt-auth.guard.ts
+exports.AuthService = void 0;
 const common_1 = require("@nestjs/common");
-const auth_decorator_1 = require("../decorators/auth.decorator");
-let JwtAuthGuard = (() => {
+let AuthService = (() => {
     let _classDecorators = [(0, common_1.Injectable)()];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
-    var JwtAuthGuard = _classThis = class {
-        constructor(reflector, authService) {
-            this.reflector = reflector;
-            this.authService = authService;
-        }
-        async canActivate(context) {
-            // Verificar si la ruta es pública
-            const isPublic = this.reflector.getAllAndOverride(auth_decorator_1.IS_PUBLIC_KEY, [
-                context.getHandler(),
-                context.getClass(),
-            ]);
-            if (isPublic) {
-                return true;
-            }
-            // Obtener el request y el token
-            const request = context.switchToHttp().getRequest();
-            const token = this.extractTokenFromHeader(request);
-            if (!token) {
-                throw new common_1.UnauthorizedException('No token provided');
-            }
-            try {
-                // Validar el token y obtener el payload
-                const payload = await this.authService.validateToken(token);
-                request.user = payload; // Adjuntar el payload al request
-                // Verificar roles
-                const requiredRoles = this.reflector.getAllAndOverride(auth_decorator_1.ROLES_KEY, [
-                    context.getHandler(),
-                    context.getClass(),
-                ]);
-                if (requiredRoles && requiredRoles.length) {
-                    const userRoles = payload.roles || [];
-                    const hasRole = requiredRoles.some((role) => userRoles.includes(role));
-                    if (!hasRole) {
-                        throw new common_1.UnauthorizedException('Insufficient permissions');
-                    }
-                }
-                return true;
-            }
-            catch (error) {
-                throw new common_1.UnauthorizedException('Invalid token');
-            }
-        }
-        extractTokenFromHeader(request) {
-            const authHeader = request.headers.authorization;
-            if (!authHeader)
-                return undefined;
-            const [type, token] = authHeader.split(' ');
-            return type === 'Bearer' ? token : undefined;
-        }
+    var AuthService = _classThis = class {
     };
-    __setFunctionName(_classThis, "JwtAuthGuard");
+    __setFunctionName(_classThis, "AuthService");
     (() => {
         const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
         __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
-        JwtAuthGuard = _classThis = _classDescriptor.value;
+        AuthService = _classThis = _classDescriptor.value;
         if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
         __runInitializers(_classThis, _classExtraInitializers);
     })();
-    return JwtAuthGuard = _classThis;
+    return AuthService = _classThis;
 })();
-exports.JwtAuthGuard = JwtAuthGuard;
-//# sourceMappingURL=jwt-auth.guard.js.map
+exports.AuthService = AuthService;
+//# sourceMappingURL=auth.service.js.map
