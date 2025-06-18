@@ -13,23 +13,28 @@ const common_1 = require("@nestjs/common");
 const auth_service_1 = require("./services/auth.service");
 let AuthorizationModule = AuthorizationModule_1 = class AuthorizationModule {
     static forRoot(authServiceProvider) {
-        // Handle both Provider and Type<any>
+        // Normalize the provider to ensure it has a 'provide' property
         const provider = this.normalizeProvider(authServiceProvider);
         return {
             module: AuthorizationModule_1,
-            providers: [provider, { provide: auth_service_1.AuthService, useExisting: provider.provide || provider }],
-            exports: [auth_service_1.AuthService],
+            global: true, // Make the module global to avoid importing it in every module
+            providers: [
+                provider,
+                {
+                    provide: auth_service_1.AuthService,
+                    useExisting: provider.provide || provider, // Map AuthService to the provided class
+                },
+            ],
+            exports: [auth_service_1.AuthService], // Export AuthService for use in guards
         };
     }
     static normalizeProvider(authServiceProvider) {
-        // If it's a class (Type<any>), convert it to a ClassProvider
         if (typeof authServiceProvider === 'function') {
             return {
-                provide: auth_service_1.AuthService,
+                provide: authServiceProvider, // Use the class as the injection token
                 useClass: authServiceProvider,
             };
         }
-        // Otherwise, assume it's a valid Provider (e.g., ClassProvider)
         return authServiceProvider;
     }
 };

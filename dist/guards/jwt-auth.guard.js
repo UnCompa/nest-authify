@@ -21,7 +21,6 @@ let JwtAuthGuard = class JwtAuthGuard {
         this.authService = authService;
     }
     async canActivate(context) {
-        // Verificar si la ruta es pública
         const isPublic = this.reflector.getAllAndOverride(auth_decorator_1.IS_PUBLIC_KEY, [
             context.getHandler(),
             context.getClass(),
@@ -29,17 +28,14 @@ let JwtAuthGuard = class JwtAuthGuard {
         if (isPublic) {
             return true;
         }
-        // Obtener el request y el token
         const request = context.switchToHttp().getRequest();
         const token = this.extractTokenFromHeader(request);
         if (!token) {
             throw new common_1.UnauthorizedException('No token provided');
         }
         try {
-            // Validar el token y obtener el payload
             const payload = await this.authService.validateToken(token);
-            request.user = payload; // Adjuntar el payload al request
-            // Verificar roles
+            request.user = payload;
             const requiredRoles = this.reflector.getAllAndOverride(auth_decorator_1.ROLES_KEY, [
                 context.getHandler(),
                 context.getClass(),
@@ -54,7 +50,7 @@ let JwtAuthGuard = class JwtAuthGuard {
             return true;
         }
         catch (error) {
-            throw new common_1.UnauthorizedException('Invalid token');
+            throw error;
         }
     }
     extractTokenFromHeader(request) {

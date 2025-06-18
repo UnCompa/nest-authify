@@ -13,7 +13,6 @@ export class JwtAuthGuard implements CanActivate {
   ) { }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Verificar si la ruta es pública
     const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
       context.getHandler(),
       context.getClass(),
@@ -23,7 +22,6 @@ export class JwtAuthGuard implements CanActivate {
       return true;
     }
 
-    // Obtener el request y el token
     const request = context.switchToHttp().getRequest();
     const token = this.extractTokenFromHeader(request);
 
@@ -32,11 +30,9 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     try {
-      // Validar el token y obtener el payload
       const payload: TokenPayload = await this.authService.validateToken(token);
-      request.user = payload; // Adjuntar el payload al request
+      request.user = payload;
 
-      // Verificar roles
       const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
         context.getHandler(),
         context.getClass(),
@@ -52,7 +48,7 @@ export class JwtAuthGuard implements CanActivate {
 
       return true;
     } catch (error) {
-      throw new UnauthorizedException('Invalid token');
+      throw error
     }
   }
 
