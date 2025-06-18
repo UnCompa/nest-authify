@@ -2,16 +2,20 @@
   "compilerOptions": {
     "module": "commonjs",
     "target": "es2017",
-    "outDir": "dist",
+    "outDir": "./dist",
     "rootDir": "./src",
     "sourceMap": true,
     "strict": true,
     "esModuleInterop": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "declaration": true, // Genera archivos .d.ts para tipos
+    "declarationMap": true, // Genera mapas para facilitar la depuración
+    "moduleResolution": "node", // Asegura resolución de módulos compatible con Node.js
+    "emitDecoratorMetadata": true, // Necesario para decoradores de NestJS
+    "experimentalDecorators": true // Necesario para decoradores de NestJS
   },
   "include": [
-    "src/**/*",
-    "libs/**/*"
+    "src/**/*" // Solo incluye los archivos dentro de src/
   ],
   "exclude": [
     "node_modules",
