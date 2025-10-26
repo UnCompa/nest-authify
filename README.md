@@ -1,8 +1,8 @@
-# 🔐 @nestjs-auth-validation
+# 🔐 @nest‑authify
 
 A complete, production-ready authentication and authorization package for NestJS applications. Supports both monolithic and microservices architectures with OAuth, JWT, Redis sessions, and more.
 
-[![npm version](https://badge.fury.io/js/%40tu-org%2Fnestjs-auth.svg)](https://www.npmjs.com/package/nest‑authify)
+[![npm version](https://badge.fury.io/js/nest-authify.svg)](https://www.npmjs.com/package/nest-authify)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## ✨ Features

@@ -16,6 +16,10 @@ import { GithubStrategy } from './strategies/github.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
+import { ClientProxyFactory } from '@nestjs/microservices';
+import { AuthMsClientService } from './microservices/auth-ms-client.service';
+import { MicroserviceJwtAuthGuard } from './guards/microservice-jwt-auth.guard';
+import { AuthMsServerController } from './microservices/auth-ms-server.controller';
 
 export interface OAuthConfig {
   clientId: string;
@@ -183,8 +187,60 @@ export class AuthModule {
       };
     }
 
-    // Otros modos (microservice-server, microservice-client)...
-    // [Código anterior para microservicios se mantiene igual]
+    // === MODO MICROSERVICIO SERVIDOR ===
+    if (options.mode === 'microservice-server') {
+      if (options.authService) {
+        providers.push({
+          provide: 'AUTH_SERVICE',
+          useClass: options.authService,
+        });
+      } else {
+        providers.push({
+          provide: 'AUTH_SERVICE',
+          useClass: DefaultAuthService,
+        });
+
+        if (options.authRepository) {
+          providers.push({
+            provide: 'AUTH_REPOSITORY',
+            useClass: options.authRepository,
+          });
+        }
+      }
+
+      return {
+        module: AuthModule,
+        imports: [
+          JwtModule.register({
+            secret: options.jwtSecret,
+            signOptions: { expiresIn: options.jwtExpiresIn || '60m' },
+          }),
+        ],
+        controllers: [AuthMsServerController],
+        providers,
+        exports: ['AUTH_SERVICE', 'AUTH_CONFIG'],
+      };
+    }
+
+    // === MODO MICROSERVICIO CLIENTE ===
+    if (options.mode === 'microservice-client') {
+      providers.push(
+        {
+          provide: 'AUTH_MICROSERVICE',
+          useFactory: () => {
+            return ClientProxyFactory.create(options.microserviceOptions);
+          },
+        },
+        AuthMsClientService,
+        MicroserviceJwtAuthGuard,
+      );
+
+      return {
+        module: AuthModule,
+        providers,
+        exports: [AuthMsClientService, MicroserviceJwtAuthGuard, 'AUTH_CONFIG'],
+      };
+    }
 
     throw new Error('Invalid mode specified');
   }
