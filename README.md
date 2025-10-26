@@ -2,7 +2,7 @@
 
 A complete, production-ready authentication and authorization package for NestJS applications. Supports both monolithic and microservices architectures with OAuth, JWT, Redis sessions, and more.
 
-[![npm version](https://badge.fury.io/js/%40tu-org%2Fnestjs-auth.svg)](https://www.npmjs.com/package/nest-auth-kit)
+[![npm version](https://badge.fury.io/js/%40tu-org%2Fnestjs-auth.svg)](https://www.npmjs.com/package/nest‑authify)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## ✨ Features
@@ -19,11 +19,11 @@ A complete, production-ready authentication and authorization package for NestJS
 ## 📦 Installation
 
 ```bash
-npm install nest-auth-kit
+npm install nest‑authify
 # or
-yarn add nest-auth-kit
+yarn add nest‑authify
 # or
-pnpm add nest-auth-kit
+pnpm add nest‑authify
 ```
 
 ### Peer Dependencies
@@ -53,7 +53,7 @@ npm install ioredis
 ```typescript
 // app.module.ts
 import { Module } from '@nestjs/common';
-import { AuthModule } from 'nest-auth-kit';
+import { AuthModule } from 'nest‑authify';
 import { UserRepository } from './repositories/user.repository';
 
 @Module({
@@ -79,7 +79,7 @@ export class AppModule {}
 ```typescript
 // auth.controller.ts
 import { Controller, Post, Body, UseGuards, Get } from '@nestjs/common';
-import { LocalAuthGuard, Auth, Public, CurrentUser } from 'nest-auth-kit';
+import { LocalAuthGuard, Auth, Public, CurrentUser } from 'nest‑authify';
 
 @Controller('auth')
 export class AuthController {
@@ -107,7 +107,7 @@ export class AuthController {
 ```typescript
 // users.controller.ts
 import { Controller, Get } from '@nestjs/common';
-import { Auth, Roles, CurrentUser } from 'nest-auth-kit';
+import { Auth, Roles, CurrentUser } from 'nest‑authify';
 
 @Controller('users')
 export class UsersController {
@@ -199,7 +199,7 @@ interface AuthModuleOptions {
 Implement `IAuthRepository` for your data source:
 
 ```typescript
-import { IAuthRepository } from 'nest-auth-kit';
+import { IAuthRepository } from 'nest‑authify';
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -311,7 +311,7 @@ export class AppModule {}
 
 // oauth.controller.ts
 import { Controller, Get, UseGuards, Res } from '@nestjs/common';
-import { GoogleAuthGuard, CurrentUser, Public } from 'nest-auth-kit';
+import { GoogleAuthGuard, CurrentUser, Public } from 'nest‑authify';
 
 @Controller('auth')
 export class OAuthController {
@@ -345,7 +345,7 @@ Extend `BaseAuthService` for custom logic:
 
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { BaseAuthService } from 'nest-auth-kit';
+import { BaseAuthService } from 'nest‑authify';
 import * as bcrypt from 'bcrypt';
 
 @Injectable()
@@ -418,7 +418,7 @@ export class AppModule {}
 
 ```typescript
 import { Controller, Post, Get } from '@nestjs/common';
-import { Auth, SessionId, CurrentUser } from 'nest-auth-kit';
+import { Auth, SessionId, CurrentUser } from 'nest‑authify';
 
 @Controller('session')
 @Auth()
@@ -596,7 +596,7 @@ export class AppModule {}
 ```typescript
 // orders.module.ts
 import { Module } from '@nestjs/common';
-import { AuthModule } from 'nest-auth-kit';
+import { AuthModule } from 'nest‑authify';
 import { Transport } from '@nestjs/microservices';
 
 @Module({
@@ -618,7 +618,7 @@ export class OrdersModule {}
 
 // orders.controller.ts
 import { Controller, Get, UseGuards } from '@nestjs/common';
-import { MicroserviceJwtAuthGuard, CurrentUser } from 'nest-auth-kit';
+import { MicroserviceJwtAuthGuard, CurrentUser } from 'nest‑authify';
 
 @Controller('orders')
 @UseGuards(MicroserviceJwtAuthGuard)
@@ -698,7 +698,7 @@ Example test setup:
 ```typescript
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtModule } from '@nestjs/jwt';
-import { AuthModule } from 'nest-auth-kit';
+import { AuthModule } from 'nest‑authify';
 
 describe('AuthService', () => {
   let service: any;
@@ -787,8 +787,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📞 Support
 
 - 📧 Email: <uncompadev@gmail.com>
-- 🐛 Issues: [GitHub Issues](https://github.com/UnCompa/nest-auth-kit/issues)
-- 💬 Discussions: [GitHub Discussions](https://github.com/UnCompa/nest-auth-kit/discussions)
+- 🐛 Issues: [GitHub Issues](https://github.com/UnCompa/nest‑authify/issues)
+- 💬 Discussions: [GitHub Discussions](https://github.com/UnCompa/nest‑authify/discussions)
 
 ## 🗺️ Roadmap
 

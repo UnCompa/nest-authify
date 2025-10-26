@@ -1,4 +1,4 @@
-# Contributing to nest-auth-kit
+# Contributing to nest‑authify
 
 First off, thank you for considering contributing to this project! 🎉
 

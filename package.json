@@ -1,5 +1,5 @@
 {
-  "name": "nest-auth-kit",
+  "name": "nest-authify",
   "version": "1.0.0",
   "description": "Complete authentication and authorization package for NestJS - Monolith and Microservices ready with OAuth, JWT, Redis sessions",
   "author": "UnCompa",
@@ -47,12 +47,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/UnCompa/nest-auth-kit.git"
+    "url": "git+https://github.com/UnCompa/nest‑authify.git"
   },
   "bugs": {
-    "url": "https://github.com/UnCompa/nest-auth-kit/issues"
+    "url": "https://github.com/UnCompa/nest‑authify/issues"
   },
-  "homepage": "https://github.com/UnCompa/nest-auth-kit#readme",
+  "homepage": "https://github.com/UnCompa/nest‑authify#readme",
   "peerDependencies": {
     "@nestjs/common": "^9.0.0 || ^10.0.0",
     "@nestjs/core": "^9.0.0 || ^10.0.0",
