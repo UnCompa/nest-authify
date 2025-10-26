@@ -1,19 +1,16 @@
-// libs/auth/src/guards/jwt-auth.guard.ts
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { AuthGuard } from '@nestjs/passport';
 import { Reflector } from '@nestjs/core';
-import { IS_PUBLIC_KEY, ROLES_KEY } from '../decorators/auth.decorator';
-import { AuthService } from '../services/auth.service';
-import { TokenPayload } from '../types/token-payload';
+import { Observable } from 'rxjs';
 
 @Injectable()
-export class JwtAuthGuard implements CanActivate {
-  constructor(
-    private readonly reflector: Reflector,
-    private readonly authService: AuthService,
-  ) { }
+export class JwtAuthGuard extends AuthGuard('jwt') {
+  constructor(private reflector: Reflector) {
+    super();
+  }
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+  canActivate(context: ExecutionContext): boolean | Promise<boolean> | Observable<boolean> {
+    const isPublic = this.reflector.getAllAndOverride<boolean>('isPublic', [
       context.getHandler(),
       context.getClass(),
     ]);
@@ -22,40 +19,13 @@ export class JwtAuthGuard implements CanActivate {
       return true;
     }
 
-    const request = context.switchToHttp().getRequest();
-    const token = this.extractTokenFromHeader(request);
-
-    if (!token) {
-      throw new UnauthorizedException('No token provided');
-    }
-
-    try {
-      const payload: TokenPayload = await this.authService.validateToken(token);
-      request.user = payload;
-
-      const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
-        context.getHandler(),
-        context.getClass(),
-      ]);
-
-      if (requiredRoles && requiredRoles.length) {
-        const userRoles = payload.roles || [];
-        const hasRole = requiredRoles.some((role) => userRoles.includes(role));
-        if (!hasRole) {
-          throw new UnauthorizedException('Insufficient permissions');
-        }
-      }
-
-      return true;
-    } catch (error) {
-      throw error
-    }
+    return super.canActivate(context);
   }
 
-  private extractTokenFromHeader(request: any): string | undefined {
-    const authHeader = request.headers.authorization;
-    if (!authHeader) return undefined;
-    const [type, token] = authHeader.split(' ');
-    return type === 'Bearer' ? token : undefined;
+  handleRequest(err: any, user: any, info: any) {
+    if (err || !user) {
+      throw err || new UnauthorizedException('Unauthorized access');
+    }
+    return user;
   }
 }

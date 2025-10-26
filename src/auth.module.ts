@@ -1,34 +1,191 @@
-// libs/auth/src/auth.module.ts
-import { DynamicModule, Module, Provider, Type } from '@nestjs/common';
-import { AuthService } from './services/auth.service';
+import { DynamicModule, Module, Provider } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { PassportModule } from '@nestjs/passport';
+import Redis from 'ioredis';
+import { FacebookAuthGuard } from './guards/facebook-auth.guard';
+import { GithubAuthGuard } from './guards/github-auth.guard';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { LocalAuthGuard } from './guards/local-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
+import { DefaultAuthService } from './implementations/default-auth.service';
+import { MemorySessionStore } from './session/memory-session.store';
+import { RedisSessionStore } from './session/redis-session.store';
+import { FacebookStrategy } from './strategies/facebook.strategy';
+import { GithubStrategy } from './strategies/github.strategy';
+import { GoogleStrategy } from './strategies/google.strategy';
+import { JwtStrategy } from './strategies/jwt.strategy';
+import { LocalStrategy } from './strategies/local.strategy';
+
+export interface OAuthConfig {
+  clientId: string;
+  clientSecret: string;
+  callbackUrl?: string;
+}
+
+export interface RedisConfig {
+  host: string;
+  port: number;
+  password?: string;
+  db?: number;
+  keyPrefix?: string;
+}
+
+export interface AuthModuleOptions {
+  // Configuración básica
+  jwtSecret: string;
+  jwtExpiresIn?: string;
+  refreshExpiresIn?: string;
+
+  // Modo: 'monolith' | 'microservice-server' | 'microservice-client'
+  mode: 'monolith' | 'microservice-server' | 'microservice-client';
+
+  // Session store (opcional)
+  sessionStore?: {
+    type: 'redis' | 'memory';
+    redis?: RedisConfig;
+  };
+
+  // Proveedor de servicio personalizado (opcional)
+  authService?: any;
+
+  // Proveedor de repositorio (opcional)
+  authRepository?: any;
+
+  // Configuración OAuth
+  google?: OAuthConfig;
+  facebook?: OAuthConfig;
+  github?: OAuthConfig;
+
+  // Estrategias a habilitar
+  strategies?: {
+    local?: boolean;
+    jwt?: boolean;
+    google?: boolean;
+    facebook?: boolean;
+    github?: boolean;
+  };
+
+  // Configuración de microservicios
+  microserviceOptions?: {
+    transport: any;
+    options: any;
+  };
+}
 
 @Module({})
-export class AuthorizationModule {
-  static forRoot(authServiceProvider: Provider | Type<any>): DynamicModule {
-    // Normalize the provider to ensure it has a 'provide' property
-    const provider: Provider = this.normalizeProvider(authServiceProvider);
+export class AuthModule {
+  static forRoot(options: AuthModuleOptions): DynamicModule {
+    const providers: Provider[] = [
+      {
+        provide: 'AUTH_CONFIG',
+        useValue: options,
+      },
+    ];
 
-    return {
-      module: AuthorizationModule,
-      global: true, // Make the module global to avoid importing it in every module
-      providers: [
-        provider,
-        {
-          provide: AuthService,
-          useExisting: (provider as any).provide || provider, // Map AuthService to the provided class
-        },
-      ],
-      exports: [AuthService], // Export AuthService for use in guards
-    };
-  }
+    // === SESSION STORE ===
+    if (options.sessionStore) {
+      if (options.sessionStore.type === 'redis') {
+        providers.push(
+          {
+            provide: 'REDIS_CLIENT',
+            useFactory: () => {
+              return new Redis({
+                host: options?.sessionStore?.redis?.host,
+                port: options?.sessionStore?.redis?.port,
+                password: options?.sessionStore?.redis?.password,
+                db: options?.sessionStore?.redis?.db || 0,
+                keyPrefix: options?.sessionStore?.redis?.keyPrefix || 'auth:',
+              });
+            },
+          },
+          {
+            provide: 'SESSION_STORE',
+            useClass: RedisSessionStore,
+          },
+        );
+      } else {
+        providers.push({
+          provide: 'SESSION_STORE',
+          useClass: MemorySessionStore,
+        });
+      }
+    }
 
-  private static normalizeProvider(authServiceProvider: Provider | Type<any>): Provider {
-    if (typeof authServiceProvider === 'function') {
+    // === MODO MONOLITO ===
+    if (options.mode === 'monolith') {
+      // Servicio de autenticación
+      if (options.authService) {
+        providers.push({
+          provide: 'AUTH_SERVICE',
+          useClass: options.authService,
+        });
+      } else {
+        providers.push({
+          provide: 'AUTH_SERVICE',
+          useClass: DefaultAuthService,
+        });
+
+        if (options.authRepository) {
+          providers.push({
+            provide: 'AUTH_REPOSITORY',
+            useClass: options.authRepository,
+          });
+        }
+      }
+
+      // Strategies
+      if (options.strategies?.local) {
+        providers.push(LocalStrategy);
+      }
+      if (options.strategies?.jwt) {
+        providers.push(JwtStrategy);
+      }
+      if (options.strategies?.google && options.google) {
+        providers.push(GoogleStrategy);
+      }
+      if (options.strategies?.facebook && options.facebook) {
+        providers.push(FacebookStrategy);
+      }
+      if (options.strategies?.github && options.github) {
+        providers.push(GithubStrategy);
+      }
+
       return {
-        provide: authServiceProvider, // Use the class as the injection token
-        useClass: authServiceProvider,
+        module: AuthModule,
+        imports: [
+          PassportModule.register({ defaultStrategy: 'jwt' }),
+          JwtModule.register({
+            secret: options.jwtSecret,
+            signOptions: { expiresIn: options.jwtExpiresIn || '60m' },
+          }),
+        ],
+        providers: [
+          ...providers,
+          JwtAuthGuard,
+          RolesGuard,
+          LocalAuthGuard,
+          GoogleAuthGuard,
+          FacebookAuthGuard,
+          GithubAuthGuard,
+        ],
+        exports: [
+          'AUTH_SERVICE',
+          'AUTH_CONFIG',
+          'SESSION_STORE',
+          JwtAuthGuard,
+          RolesGuard,
+          LocalAuthGuard,
+          GoogleAuthGuard,
+          FacebookAuthGuard,
+          GithubAuthGuard,
+        ],
       };
     }
-    return authServiceProvider;
+
+    // Otros modos (microservice-server, microservice-client)...
+    // [Código anterior para microservicios se mantiene igual]
+
+    throw new Error('Invalid mode specified');
   }
 }

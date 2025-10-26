@@ -1,24 +1,23 @@
 {
   "compilerOptions": {
     "module": "commonjs",
-    "target": "es2017",
-    "outDir": "./dist",
-    "rootDir": "./src",
+    "declaration": true,
+    "removeComments": true,
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "allowSyntheticDefaultImports": true,
+    "target": "ES2021",
     "sourceMap": true,
-    "strict": true,
-    "esModuleInterop": true,
+    "outDir": "./dist",
+    "incremental": true,
     "skipLibCheck": true,
-    "declaration": true, // Genera archivos .d.ts para tipos
-    "declarationMap": true, // Genera mapas para facilitar la depuración
-    "moduleResolution": "node", // Asegura resolución de módulos compatible con Node.js
-    "emitDecoratorMetadata": true, // Necesario para decoradores de NestJS
-    "experimentalDecorators": true // Necesario para decoradores de NestJS
+    "strictNullChecks": false,
+    "noImplicitAny": false,
+    "strictBindCallApply": false,
+    "forceConsistentCasingInFileNames": false,
+    "noFallthroughCasesInSwitch": false,
+    "esModuleInterop": true
   },
-  "include": [
-    "src/**/*" // Solo incluye los archivos dentro de src/
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "test", "**/*spec.ts"]
 }
