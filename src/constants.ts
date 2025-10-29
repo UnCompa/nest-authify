@@ -1,6 +1,10 @@
 /**
  * Tokens de inyección de dependencias
  */
+// constants.ts
+export const GITHUB_STRATEGY = 'GITHUB_STRATEGY';
+export const GOOGLE_STRATEGY = 'GOOGLE_STRATEGY';
+export const FACEBOOK_STRATEGY = 'FACEBOOK_STRATEGY';
 
 /**
  * Token para inyectar las opciones del módulo

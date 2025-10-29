@@ -407,6 +407,9 @@ export abstract class BaseAuthService {
     providerId: string,
     profile: any,
   ): Promise<any> {
+
+    console.info(`Validando usuario OAuth de ${provider} con ID ${providerId}`);
+    console.info('Perfil recibido:', profile);
     if (!this.repository) {
       throw new Error('Auth repository not configured');
     }
@@ -415,10 +418,12 @@ export abstract class BaseAuthService {
     let user = await this.repository.findUserByProviderId(provider, providerId);
 
     if (!user) {
+      const email = profile.emails?.[0]?.value || null;
+      const username = profile.username || `${provider}_${providerId}`;
       // Crear nuevo usuario
       user = await this.repository.createUser({
-        email: profile.email,
-        username: profile.username || profile.email,
+        email,
+        username,
         fullName: profile.displayName || profile.name,
         provider,
         providerId,

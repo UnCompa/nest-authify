@@ -1,4 +1,4 @@
-import { DynamicModule, Global, Module, Provider, Type } from '@nestjs/common';
+import { DynamicModule, Global, INestApplication, Module, Provider, Type } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtModule, JwtService } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
@@ -29,7 +29,7 @@ import { RolesGuard } from './guards/roles.guard';
 
 import { APP_GUARD } from '@nestjs/core';
 import Redis from 'ioredis';
-import { AUTH_MODULE_OPTIONS, AUTH_SERVICE, SESSION_STORE } from './constants';
+import { AUTH_MODULE_OPTIONS, AUTH_SERVICE, FACEBOOK_STRATEGY, GITHUB_STRATEGY, GOOGLE_STRATEGY, SESSION_STORE } from './constants';
 import { AuthModuleAsyncOptions, AuthModuleOptions, SessionStoreConfig } from './interfaces/auth-options.interface';
 import { HashService } from './services/hash.service';
 import { MemorySessionStore } from './session/memory-session.store';
@@ -41,7 +41,7 @@ export class AuthModule {
   /**
    * Configuración síncrona del módulo
    */
-  static forRoot(options: AuthModuleOptions): DynamicModule {
+  static forRoot(options: AuthModuleOptions, app?: INestApplication): DynamicModule {
     const providers = this.createProviders(options);
     const controllers = this.createControllers(options);
     const imports = this.createImports(options);
@@ -61,6 +61,7 @@ export class AuthModule {
           provide: APP_GUARD,
           useClass: RolesGuard,
         },
+        { provide: 'NEST_APP', useValue: app },
       ],
       exports: [
         AUTH_SERVICE,
@@ -90,7 +91,7 @@ export class AuthModule {
         validationSchema: this.createValidationSchema(),
         isGlobal: true,
       }),
-      PassportModule.register({ defaultStrategy: 'jwt' }),
+      PassportModule.register({ defaultStrategy: 'jwt', session: false }),
       JwtModule.registerAsync({
         imports: [ConfigModule],
         useFactory: async (configService: ConfigService) => ({
@@ -144,7 +145,7 @@ export class AuthModule {
         validationSchema: this.createValidationSchema(),
         isGlobal: true,
       }),
-      PassportModule.register({ defaultStrategy: 'jwt' }),
+      PassportModule.register({ defaultStrategy: 'jwt', session: false }),
       JwtModule.register({
         secret: options.jwtSecret,
         signOptions: {
@@ -172,6 +173,7 @@ export class AuthModule {
         provide: AUTH_MODULE_OPTIONS,
         useValue: options,
       },
+
       // Hash Service
       {
         provide: HashService,
@@ -257,8 +259,11 @@ export class AuthModule {
     // --- ESTRATEGIAS OAuth: CARGA DINÁMICA ---
     if (options.strategies?.google && options.google) {
       providers.push({
-        provide: 'GOOGLE_STRATEGY',
+        provide: GOOGLE_STRATEGY,
         useFactory: async (authService: BaseAuthService) => {
+          if (!options.strategies?.google || !options.google) {
+            return null;
+          }
           try {
             const { Strategy } = await import('passport-google-oauth20');
             const GoogleStrategyClass = class extends Strategy {
@@ -272,7 +277,7 @@ export class AuthModule {
                   },
                   async (_: any, __: any, profile: any, done: any) => {
                     const user = await authService.validateOAuthUser('google', profile.id, profile);
-                    done(null, user);
+                    done(null, profile);
                   },
                 );
               }
@@ -292,8 +297,11 @@ export class AuthModule {
 
     if (options.strategies?.facebook && options.facebook) {
       providers.push({
-        provide: 'FACEBOOK_STRATEGY',
+        provide: FACEBOOK_STRATEGY,
         useFactory: async (authService: BaseAuthService) => {
+          if (!options.strategies?.facebook || !options.facebook) {
+            return null;
+          }
           try {
             const { Strategy } = await import('passport-facebook');
             const FacebookStrategyClass = class extends Strategy {
@@ -311,7 +319,7 @@ export class AuthModule {
                       username: profile.emails?.[0]?.value || `fb_${profile.id}`,
                       fullName: profile.displayName,
                     });
-                    done(null, user);
+                    done(null, profile);
                   },
                 );
               }
@@ -331,8 +339,11 @@ export class AuthModule {
 
     if (options.strategies?.github && options.github) {
       providers.push({
-        provide: 'GITHUB_STRATEGY',
+        provide: GITHUB_STRATEGY,
         useFactory: async (authService: BaseAuthService) => {
+          if (!options.strategies?.github || !options.github) {
+            return null;
+          }
           try {
             const { Strategy } = await import('passport-github2');
             const GithubStrategyClass = class extends Strategy {
@@ -342,10 +353,11 @@ export class AuthModule {
                     clientID: options.github!.clientId,
                     clientSecret: options.github!.clientSecret,
                     callbackURL: options.github!.callbackUrl,
+                    scope: ['user:email']
                   },
                   async (_: any, __: any, profile: any, done: any) => {
                     const user = await authService.validateOAuthUser('github', profile.id, profile);
-                    done(null, user);
+                    done(null, profile);
                   },
                 );
               }
@@ -477,9 +489,10 @@ export class AuthModule {
 
     // Controlador OAuth si hay estrategias OAuth configuradas
     const hasOAuth =
-      options.strategies?.google ||
-      options.strategies?.facebook ||
-      options.strategies?.github;
+      (options.strategies?.google && options.google) ||
+      (options.strategies?.facebook && options.facebook) ||
+      (options.strategies?.github && options.github);
+
     if (hasOAuth) {
       controllers.push(OAuthController);
     }

@@ -1,6 +1,6 @@
 export interface IAuthService {
   validateUser(username: string, password: string): Promise<any>;
-  validateOAuthUser?(profile: any, provider: string): Promise<any>;
+  validateOAuthUser?(provider: string, providerId: string ,profile: any): Promise<any>;
   getUserById(userId: string): Promise<any>;
   verifyToken(token: string): Promise<any>;
   refreshAccessToken(refreshToken: string): Promise<any>;
