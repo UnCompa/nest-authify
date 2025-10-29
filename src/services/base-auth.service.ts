@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { v4 as uuidv4 } from 'uuid';
@@ -21,13 +21,17 @@ import { HashService } from './hash.service';
  */
 @Injectable()
 export abstract class BaseAuthService {
+  private readonly logger = new Logger("NestAuthify");
+  private readonly debugEnabled: boolean;
   constructor(
     protected readonly jwtService: JwtService,
     protected readonly sessionStore: ISessionStore,
     protected readonly hashService: HashService,
     protected readonly repository?: IAuthRepository,
     protected readonly configService?: ConfigService,
-  ) { }
+  ) {
+    this.debugEnabled = !!(this.configService?.get('AUTHIFY_DEBUG') === 'true');
+  }
 
   /**
    * Crea un JWT access token
@@ -37,6 +41,9 @@ export abstract class BaseAuthService {
     expiresIn?: string,
     sessionId?: string,
   ): Promise<string> {
+    if (this.debugEnabled) {
+      this.logger.debug('🔑 Creando JWT', { userId: user.id, expiresIn, sessionId: sessionId || 'nuevo' });
+    }
     const payload: JwtPayload = {
       sub: user.id,
       username: user.username,
@@ -45,6 +52,10 @@ export abstract class BaseAuthService {
       permissions: user.permissions || [],
       sessionId: sessionId || uuidv4(),
     };
+
+    if (this.debugEnabled) {
+      this.logger.debug('✅ JWT creado exitosamente');
+    }
 
     return this.jwtService.signAsync(payload, {
       expiresIn: expiresIn || this.configService?.get('JWT_EXPIRES_IN', '60m'),
@@ -59,15 +70,23 @@ export abstract class BaseAuthService {
     expiresIn?: string,
     sessionId?: string,
   ): Promise<string> {
+    if (this.debugEnabled) {
+      this.logger.debug('🔄 Creando refresh token', { userId: user.id, expiresIn });
+    }
     const payload: JwtPayload = {
       sub: user.id,
       sessionId: sessionId || uuidv4(),
     };
 
-    return this.jwtService.signAsync(payload, {
-      expiresIn:
-        expiresIn || this.configService?.get('REFRESH_EXPIRES_IN', '7d'),
+    const token = await this.jwtService.signAsync(payload, {
+      expiresIn: expiresIn || this.configService?.get('REFRESH_EXPIRES_IN', '7d'),
     });
+
+    if (this.debugEnabled) {
+      this.logger.debug('✅ Refresh token creado');
+    }
+
+    return token;
   }
 
   /**
@@ -77,6 +96,9 @@ export abstract class BaseAuthService {
     user: any,
     options?: CreateSessionOptions,
   ): Promise<AuthSession> {
+    if (this.debugEnabled) {
+      this.logger.debug('🎯 Iniciando creación de sesión', { userId: user.id, provider: options?.provider || 'local' });
+    }
     const sessionId = uuidv4();
     const accessToken = await this.createJwt(
       user,
@@ -102,12 +124,19 @@ export abstract class BaseAuthService {
       options?.refreshExpiresIn ||
       this.configService?.get('REFRESH_EXPIRES_IN', '7d'),
     );
+    if (this.debugEnabled) {
+      this.logger.debug('💾 Guardando sesión en store', { sessionId, ttl: `${ttl}s`, key: `session:${sessionId}` });
+    }
     await this.sessionStore.set(`session:${sessionId}`, sessionData, ttl);
 
     // Calcular expiresIn en segundos
     const expiresIn = this.parseDuration(
       options?.expiresIn || this.configService?.get('JWT_EXPIRES_IN', '60m'),
     );
+
+    if (this.debugEnabled) {
+      this.logger.debug('✅ Sesión creada y guardada');
+    }
 
     return {
       accessToken,
@@ -124,18 +153,32 @@ export abstract class BaseAuthService {
    * Verifica y decodifica un token
    */
   async verifyToken(token: string): Promise<JwtPayload> {
+    if (this.debugEnabled) {
+      this.logger.debug('🔍 Verificando token');
+    }
     try {
-      
+
       const payload = await this.jwtService.verifyAsync<JwtPayload>(token);
-      
+      if (this.debugEnabled) {
+        this.logger.debug('✅ Token verificado', {
+          userId: payload.sub,
+          sessionId: payload.sessionId?.substring(0, 8) + '...'
+        });
+      }
       // Verificar si la sesión existe
       if (payload.sessionId) {
         const sessionExists = await this.sessionStore.exists(
           `session:${payload.sessionId}`,
         );
-      
+
         if (!sessionExists) {
+          if (this.debugEnabled) {
+            this.logger.debug('❌ Sesión revocada');
+          }
           throw new UnauthorizedException('Session has been revoked');
+        }
+        if (this.debugEnabled) {
+          this.logger.debug('✅ Sesión válida');
         }
       }
 
@@ -153,6 +196,9 @@ export abstract class BaseAuthService {
     refreshToken: string,
   ): Promise<{ accessToken: string; expiresIn: number }> {
     try {
+      if (this.debugEnabled) {
+        this.logger.debug('🔄 Refrescando access token');
+      }
       const payload = await this.jwtService.verifyAsync<JwtPayload>(
         refreshToken,
       );
@@ -179,6 +225,10 @@ export abstract class BaseAuthService {
         this.configService?.get('JWT_EXPIRES_IN', '60m'),
       );
 
+      if (this.debugEnabled) {
+        this.logger.debug('✅ Access token refrescado', { userId: user.id });
+      }
+
       return { accessToken, expiresIn };
     } catch (error) {
       throw new UnauthorizedException('Invalid or expired refresh token');
@@ -189,13 +239,22 @@ export abstract class BaseAuthService {
    * Revoca una sesión específica
    */
   async revokeSession(sessionId: string): Promise<void> {
+    if (this.debugEnabled) {
+      this.logger.debug('🗑️ Revocando sesión', { sessionId: sessionId.substring(0, 8) + '...' });
+    }
     await this.sessionStore.delete(`session:${sessionId}`);
+    if (this.debugEnabled) {
+      this.logger.debug('✅ Sesión revocada');
+    }
   }
 
   /**
    * Revoca todas las sesiones de un usuario
    */
   async revokeAllUserSessions(userId: string): Promise<void> {
+    if (this.debugEnabled) {
+      this.logger.debug('🗑️ Revocando TODAS las sesiones del usuario', { userId });
+    }
     // Buscar todas las sesiones del usuario
     const keys = await this.getAllSessionKeys();
     for (const key of keys) {
@@ -204,14 +263,21 @@ export abstract class BaseAuthService {
         await this.sessionStore.delete(key);
       }
     }
+    if (this.debugEnabled) {
+      this.logger.debug('✅ Todas las sesiones revocadas');
+    }
   }
 
   /**
    * Registra un nuevo usuario
    */
   async register(data: RegisterUserDto): Promise<any> {
+
     if (!this.repository) {
       throw new Error('Auth repository not configured');
+    }
+    if (this.debugEnabled) {
+      this.logger.debug('📝 Registrando nuevo usuario', { email: data.email });
     }
 
     // Verificar si el usuario ya existe
@@ -233,6 +299,10 @@ export abstract class BaseAuthService {
       isActive: true,
       provider: 'local',
     });
+
+    if (this.debugEnabled) {
+      this.logger.debug('✅ Usuario registrado', { userId: user.id });
+    }
 
     return user;
   }
@@ -274,7 +344,11 @@ export abstract class BaseAuthService {
       throw new Error('Auth repository not configured');
     }
 
-    console.info('Validating user:', identifier);
+    if (this.debugEnabled) {
+      this.logger.debug('🔐 Validando usuario', { identifier: identifier.substring(0, 20) + '...' });
+    }
+
+
 
     // Detectar si el identificador es un email
     const isEmail = this.isValidEmail(identifier);
@@ -282,24 +356,20 @@ export abstract class BaseAuthService {
     let user: AuthUser | null = null;
 
     if (isEmail) {
-      console.info('Identifier detected as email, searching by email');
       user = await this.repository.findUserByEmail(identifier);
     } else {
-      console.info('Identifier detected as username, searching by username');
       user = await this.repository.findUserByUsername(identifier);
     }
 
     if (!user) {
-      console.info('User not found');
+      this.logger.error('User not found');
       return null;
     }
 
-    console.info('User found:', {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      isActive: user.isActive,
-    });
+    if (this.debugEnabled) {
+      this.logger.debug('👤 Usuario encontrado', { id: user.id, active: user.isActive });
+    }
+
 
     // Validar contraseña
     const isPasswordValid = await this.hashService.verify(
@@ -312,7 +382,9 @@ export abstract class BaseAuthService {
       return null;
     }
 
-    console.info('User validated successfully');
+    if (this.debugEnabled) {
+      this.logger.debug('✅ Usuario validado correctamente');
+    }
 
     // Retornar usuario sin el password
     const { password: _, ...result } = user;

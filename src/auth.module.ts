@@ -18,8 +18,6 @@ import { LocalStrategy } from './strategies/local.strategy';
 
 // Session Stores
 import { ISessionStore } from './interfaces/session-store.interface';
-import { MemorySessionStore } from './stores/memory-session.store';
-import { RedisSessionStore } from './stores/redis-session.store';
 
 // Guards
 import { FacebookAuthGuard } from './guards/facebook-auth.guard';
@@ -30,9 +28,12 @@ import { LocalAuthGuard } from './guards/local-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 
 import { APP_GUARD } from '@nestjs/core';
+import Redis from 'ioredis';
 import { AUTH_MODULE_OPTIONS, AUTH_SERVICE, SESSION_STORE } from './constants';
-import { AuthModuleAsyncOptions, AuthModuleOptions } from './interfaces/auth-options.interface';
+import { AuthModuleAsyncOptions, AuthModuleOptions, SessionStoreConfig } from './interfaces/auth-options.interface';
 import { HashService } from './services/hash.service';
+import { MemorySessionStore } from './session/memory-session.store';
+import { RedisSessionStore } from './session/redis-session.store';
 
 @Global()
 @Module({})
@@ -155,6 +156,12 @@ export class AuthModule {
     return imports;
   }
 
+  private static isSessionStoreConfig(
+    store: SessionStoreConfig | Type<ISessionStore> | null
+  ): store is SessionStoreConfig {
+    return !!store && typeof store === 'object' && 'type' in store;
+  }
+
   /**
    * Crea los providers necesarios basados en la configuración
    */
@@ -172,26 +179,14 @@ export class AuthModule {
           return new HashService(options.hashCallback);
         },
       },
-      // Session Store
-      {
-        provide: SESSION_STORE,
-        useFactory: (configService: ConfigService) => {
-          return this.createSessionStore(options, configService);
-        },
-        inject: [ConfigService],
-      },
-      /* {
-        provide: 'JwtService',
-        useExisting: JwtModule, // Usa el JwtService del JwtModule importado
-      }, */
       // Auth Repository
       ...(options.authRepository
         ? [
-            {
-              provide: 'AUTH_REPOSITORY',
-              useClass: options.authRepository,
-            },
-          ]
+          {
+            provide: 'AUTH_REPOSITORY',
+            useClass: options.authRepository,
+          },
+        ]
         : []),
       // Auth Service
       {
@@ -229,6 +224,28 @@ export class AuthModule {
         ],
       },
     ];
+
+
+    if (options.sessionStore === null) {
+    } else if (typeof options.sessionStore === 'function') {
+      // Custom clase (ej: new MyPrismaStore())
+      providers.push({
+        provide: SESSION_STORE,
+        useClass: options.sessionStore as Type<ISessionStore>,
+      });
+    } else if (this.isSessionStoreConfig(options.sessionStore)) {
+      // ✅ Memory/Redis: TS feliz
+      providers.push({
+        provide: SESSION_STORE,
+        useFactory: (configService?: ConfigService) => {
+          return this.createSessionStore(options.sessionStore as SessionStoreConfig, configService);
+        },
+        inject: [{ token: ConfigService, optional: true }],
+      });
+    }
+    else {
+      throw new Error('sessionStore inválido');
+    }
 
     // Strategies
     if (options.strategies?.local) {
@@ -378,16 +395,7 @@ export class AuthModule {
         },
         inject: [AUTH_MODULE_OPTIONS],
       },
-      {
-        provide: SESSION_STORE,
-        useFactory: (
-          moduleOptions: AuthModuleOptions,
-          configService: ConfigService,
-        ) => {
-          return this.createSessionStore(moduleOptions, configService);
-        },
-        inject: [AUTH_MODULE_OPTIONS, ConfigService],
-      },
+
       {
         provide: AUTH_SERVICE,
         useFactory: (
@@ -425,6 +433,21 @@ export class AuthModule {
         ],
       },
     ];
+
+    providers.push({
+      provide: SESSION_STORE,
+      useFactory: (moduleOptions: AuthModuleOptions, configService: ConfigService) => {
+        if (moduleOptions.sessionStore === null) {
+          throw new Error('En modo async: provee SESSION_STORE manualmente en AppModule');
+        }
+        if (typeof moduleOptions.sessionStore === 'function') {
+          throw new Error('Custom class no soportado en async. Provee manual en AppModule');
+        }
+        // Solo memory/redis en async
+        return this.createSessionStore(moduleOptions.sessionStore, configService);
+      },
+      inject: [AUTH_MODULE_OPTIONS, ConfigService],
+    });
 
     // Strategies y Guards se añaden dinámicamente
     providers.push(
@@ -465,25 +488,48 @@ export class AuthModule {
   }
 
   /**
-   * Crea el session store apropiado
-   */
+ * Crea el session store apropiado
+ */
   private static createSessionStore(
-    options: AuthModuleOptions,
-    configService: ConfigService,
+    sessionConfig: SessionStoreConfig | undefined,
+    configService?: ConfigService,
   ): ISessionStore {
-    if (!options.sessionStore) {
+    if (!sessionConfig || sessionConfig.type === 'memory') {
       return new MemorySessionStore();
     }
 
-    if (options.sessionStore.type === 'redis') {
-      const redisConfig = options.sessionStore.redis || {
-        host: configService.get('REDIS_HOST', 'localhost'),
-        port: configService.get('REDIS_PORT', 6379),
-        password: configService.get('REDIS_PASSWORD'),
-        db: configService.get('REDIS_DB', 0),
-        keyPrefix: configService.get('REDIS_KEY_PREFIX', 'auth:'),
+    if (sessionConfig.type === 'redis') {
+      const redisConfig = sessionConfig.redis || {
+        host: configService?.get('REDIS_HOST', 'localhost') || 'localhost',
+        port: configService?.get('REDIS_PORT', 6379) || 6379,
+        password: configService?.get('REDIS_PASSWORD'),
+        db: configService?.get('REDIS_DB', 0) || 0,
+        keyPrefix: configService?.get('REDIS_KEY_PREFIX', 'auth:') || 'auth:',
       };
-      return new RedisSessionStore(redisConfig);
+
+      // Crear cliente Redis
+      const redisClient = new Redis({
+        host: redisConfig.host,
+        port: redisConfig.port,
+        password: redisConfig.password,
+        db: redisConfig.db,
+        keyPrefix: redisConfig.keyPrefix,
+      });
+
+      // Crear providers para inyección
+      const providers = [
+        {
+          provide: 'REDIS_CLIENT',
+          useValue: redisClient,
+        },
+        {
+          provide: 'REDIS_CONFIG',
+          useValue: { keyPrefix: redisConfig.keyPrefix },
+        },
+      ];
+
+      // Retornar instancia manualmente (o mejor, usar el container de NestJS)
+      return new RedisSessionStore(redisClient, { keyPrefix: redisConfig.keyPrefix });
     }
 
     return new MemorySessionStore();

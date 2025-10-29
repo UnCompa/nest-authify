@@ -1,5 +1,3 @@
-// ============= session-store.interface.ts =============
-
 /**
  * Interface para almacenamiento de sesiones
  */

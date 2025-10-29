@@ -51,8 +51,8 @@ export * from './decorators/ip-address.decorator';
 export * from './decorators/user-agent.decorator';
 
 // Session Stores
-export * from './stores/memory-session.store';
-export * from './stores/redis-session.store';
+export * from './session/memory-session.store';
+export * from './session/redis-session.store';
 
 // Constants
 export * from './constants';

@@ -129,8 +129,6 @@ async login(
     throw new UnauthorizedException('User account is inactive');
   }
 
-  console.info(`User ${identifier} logged in successfully`);
-
   // Crear sesión
   const session = await this.authService.createSession(user);
 

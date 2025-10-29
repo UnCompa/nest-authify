@@ -1,4 +1,7 @@
 import { ModuleMetadata, Type } from '@nestjs/common';
+import { IAuthService } from '../core/interfaces/auth-service.interface';
+import { IAuthRepository } from './auth-repository.interface';
+import { ISessionStore } from './session-store.interface';
 
 /**
  * Modo de operación del módulo de autenticación
@@ -113,19 +116,19 @@ export interface AuthModuleOptions {
    * Configuración del almacén de sesiones
    * Si no se proporciona, se usa memoria por defecto
    */
-  sessionStore?: SessionStoreConfig;
+  sessionStore?: SessionStoreConfig | Type<ISessionStore>;
 
   /**
    * Clase del servicio de autenticación personalizado
    * Debe extender BaseAuthService
    */
-  authService?: Type<any>;
+  authService?: Type<IAuthService>;
 
   /**
    * Clase del repositorio de autenticación
    * Debe implementar IAuthRepository
    */
-  authRepository?: Type<any>;
+  authRepository?: Type<IAuthRepository>;
 
   /**
    * Callback para hash de contraseñas personalizado
