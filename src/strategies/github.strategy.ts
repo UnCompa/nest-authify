@@ -1,37 +1,59 @@
-import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, Profile } from 'passport-github2';
-import { Injectable, Inject, UnauthorizedException } from '@nestjs/common';
+// src/strategies/github.strategy.ts
+
+import { Injectable } from '@nestjs/common';
 import { IAuthService } from '../core/interfaces/auth-service.interface';
 import { ProvidersAuth } from '../core/types/auth-session.interface';
+import { GithubOAuthConfig } from '../interfaces/auth-options.interface';
 
 @Injectable()
-export class GithubStrategy extends PassportStrategy(Strategy, 'github') {
+export class GithubStrategy {
+  private strategy: any = null;
+
   constructor(
-    @Inject('AUTH_CONFIG') private config: any,
-    @Inject('AUTH_SERVICE') private authService: IAuthService,
+    private readonly authService: IAuthService,
+    private readonly config: GithubOAuthConfig,
   ) {
-    super({
-      clientID: config.github?.clientId,
-      clientSecret: config.github?.clientSecret,
-      callbackURL: config.github?.callbackUrl || 'http://localhost:3000/auth/github/callback',
-      scope: ['user:email'],
-    });
+    this.init();
   }
 
-  async validate(
-    accessToken: string,
-    refreshToken: string,
-    profile: Profile,
-    done: (err: any, user: any, info?: any) => void,
-  ): Promise<any> {
+  private async init() {
     try {
-      if (!this.authService || typeof this.authService.validateOAuthUser !== 'function') {
-        throw new UnauthorizedException('Authentication service unavailable');
+      const { Strategy } = await import('passport-github2');
+
+      this.strategy = new Strategy(
+        {
+          clientID: this.config.clientId,
+          clientSecret: this.config.clientSecret,
+          callbackURL: this.config.callbackUrl || 'http://localhost:3000/auth/github/callback',
+          scope: this.config.scope || ['user:email'],
+        },
+        async (accessToken: string, refreshToken: string, profile: any, done: any) => {
+          try {
+            const user = await this.authService.validateOAuthUser(profile, ProvidersAuth.GITHUB);
+            done(null, user);
+          } catch (err) {
+            done(err);
+          }
+        },
+      );
+
+      const passport = (await import('passport')).default || (await import('passport'));
+      passport.use('github', this.strategy);
+    } catch (err: any) {
+      if (err.code === 'MODULE_NOT_FOUND') {
+        console.warn('passport-github2 no instalado. GitHub OAuth desactivado.');
+      } else {
+        console.error('Error cargando GitHub Strategy:', err);
       }
-      const user = await this.authService.validateOAuthUser(profile, ProvidersAuth.GITHUB);
-      done(null, user);
-    } catch (error) {
-      done(error, false);
+      this.strategy = null;
     }
+  }
+
+  getStrategy() {
+    return this.strategy;
+  }
+
+  isEnabled(): boolean {
+    return this.strategy !== null;
   }
 }

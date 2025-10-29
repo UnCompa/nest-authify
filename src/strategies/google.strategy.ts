@@ -1,37 +1,64 @@
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
-import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, VerifyCallback } from 'passport-google-oauth20';
-import { IAuthService } from '../core/interfaces/auth-service.interface';
-import { ProvidersAuth } from '../core/types/auth-session.interface';
+// src/strategies/google.strategy.ts
+
+import { Injectable } from '@nestjs/common';
+import { BaseAuthService } from '../services/base-auth.service';
+import { GoogleOAuthConfig } from '../interfaces/auth-options.interface';
 
 @Injectable()
-export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
+export class GoogleStrategy {
+  private strategy: any = null;
+
   constructor(
-    @Inject('AUTH_CONFIG') private config: any,
-    @Inject('AUTH_SERVICE') private authService: IAuthService,
+    private readonly authService: BaseAuthService,
+    private readonly config: GoogleOAuthConfig,
   ) {
-    super({
-      clientID: config.google?.clientId,
-      clientSecret: config.google?.clientSecret,
-      callbackURL: config.google?.callbackUrl || 'http://localhost:3000/auth/google/callback',
-      scope: ['email', 'profile'],
-    });
+    this.init();
   }
 
-  async validate(
-    accessToken: string,
-    refreshToken: string,
-    profile: any,
-    done: VerifyCallback,
-  ): Promise<any> {
+  private async init() {
     try {
-      if (!this.authService || typeof this.authService.validateOAuthUser !== 'function') {
-            throw new UnauthorizedException('Authentication service unavailable');
+      const { Strategy } = await import('passport-google-oauth20');
+
+      this.strategy = new Strategy(
+        {
+          clientID: this.config.clientId,
+          clientSecret: this.config.clientSecret,
+          callbackURL: this.config.callbackUrl || 'http://localhost:3000/auth/google/callback',
+          scope: this.config.scope || ['email', 'profile'],
+        },
+        async (accessToken: string, refreshToken: string, profile: any, done: any) => {
+          try {
+            const { id, name, emails, photos } = profile;
+            const user = await this.authService.validateOAuthUser('google', id, {
+              email: emails?.[0]?.value,
+              username: emails?.[0]?.value || `google_${id}`,
+              displayName: `${name?.givenName} ${name?.familyName}`.trim(),
+              photo: photos?.[0]?.value,
+            });
+            done(null, user);
+          } catch (err) {
+            done(err);
           }
-      const user = await this.authService.validateOAuthUser(profile, ProvidersAuth.GOOGLE);
-      done(null, user);
-    } catch (error) {
-      done(error, false);
+        },
+      );
+
+      const passport = (await import('passport')).default || (await import('passport'));
+      passport.use('google', this.strategy);
+    } catch (err: any) {
+      if (err.code === 'MODULE_NOT_FOUND') {
+        console.warn('passport-google-oauth20 no instalado. Google OAuth desactivado.');
+      } else {
+        console.error('Error cargando Google Strategy:', err);
+      }
+      this.strategy = null;
     }
+  }
+
+  getStrategy() {
+    return this.strategy;
+  }
+
+  isEnabled(): boolean {
+    return this.strategy !== null;
   }
 }

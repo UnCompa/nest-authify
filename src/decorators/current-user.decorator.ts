@@ -1,7 +1,8 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
 /**
- * Inyecta el usuario actual en el parámetro del controlador
+ * Extrae el usuario del request
+ * @param data Propiedad específica del usuario a extraer (opcional)
  */
 export const CurrentUser = createParamDecorator(
   (data: string | undefined, ctx: ExecutionContext) => {
@@ -11,3 +12,4 @@ export const CurrentUser = createParamDecorator(
     return data ? user?.[data] : user;
   },
 );
+

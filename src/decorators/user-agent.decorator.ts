@@ -1,11 +1,11 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
 /**
- * Extrae el session ID del JWT payload
+ * Extrae el User-Agent del request
  */
-export const SessionId = createParamDecorator(
+export const UserAgent = createParamDecorator(
   (data: unknown, ctx: ExecutionContext) => {
     const request = ctx.switchToHttp().getRequest();
-    return request.user?.sessionId;
+    return request.headers['user-agent'];
   },
 );

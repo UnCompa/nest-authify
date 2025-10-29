@@ -1,11 +1,11 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 
 /**
- * Extrae el session ID del JWT payload
+ * Extrae la dirección IP del cliente
  */
-export const SessionId = createParamDecorator(
+export const IpAddress = createParamDecorator(
   (data: unknown, ctx: ExecutionContext) => {
     const request = ctx.switchToHttp().getRequest();
-    return request.user?.sessionId;
+    return request.ip || request.connection.remoteAddress;
   },
 );

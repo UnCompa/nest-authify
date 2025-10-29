@@ -1,8 +1,8 @@
-# 🔐 @nest‑authify
+# 🔐 nest-authify
 
-A complete, production-ready authentication and authorization package for NestJS applications. Supports both monolithic and microservices architectures with OAuth, JWT, Redis sessions, and more.
+Complete, production-ready authentication and authorization package for NestJS applications. Supports monolithic and microservices architectures with OAuth, JWT, Redis sessions, and more.
 
-[![npm version](https://badge.fury.io/js/nest-authify.svg)](https://www.npmjs.com/package/nest-authify)
+[![npm version](https://badge.fury.io/js/nest-authify.svg)](https://badge.fury.io/js/nest-authify)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## ✨ Features
@@ -11,34 +11,31 @@ A complete, production-ready authentication and authorization package for NestJS
 - 🏢 **Flexible Architecture**: Works in monolithic and microservices setups
 - 🔄 **Session Management**: Optional Redis-backed sessions with revocation support
 - 🎯 **Easy to Use**: Unified `@Auth()` decorator for authentication and authorization
-- 🛡️ **Type-Safe**: Full TypeScript support
+- 🛡️ **Type-Safe**: Full TypeScript support with comprehensive types
 - 🔧 **Extensible**: Base classes for custom implementations
 - 📦 **Plug & Play**: Default implementations for quick setup
 - 🚀 **Production Ready**: Built-in guards, decorators, and best practices
+- 💾 **Flexible Storage**: Memory or Redis session storage
+- 📝 **Swagger Integration**: Automatic API documentation
+- 🎨 **Customizable**: Custom hash functions, repositories, and services
 
 ## 📦 Installation
 
 ```bash
-npm install nest‑authify
+npm install nest-authify
 # or
-yarn add nest‑authify
+yarn add nest-authify
 # or
-pnpm add nest‑authify
+pnpm add nest-authify
 ```
 
-### Peer Dependencies
+### Required Peer Dependencies
 
 ```bash
-npm install @nestjs/common @nestjs/core @nestjs/jwt @nestjs/passport passport passport-jwt passport-local bcrypt
+npm install @nestjs/common @nestjs/core @nestjs/jwt @nestjs/passport @nestjs/config passport passport-jwt passport-local bcrypt joi uuid
 ```
 
 ### Optional Dependencies
-
-For OAuth support:
-
-```bash
-npm install passport-google-oauth20 passport-facebook passport-github2
-```
 
 For Redis sessions:
 
@@ -46,22 +43,35 @@ For Redis sessions:
 npm install ioredis
 ```
 
+For OAuth support:
+
+```bash
+# Google
+npm install passport-google-oauth20
+
+# Facebook
+npm install passport-facebook
+
+# GitHub
+npm install passport-github2
+```
+
 ## 🚀 Quick Start
 
-### 1. Basic Setup (Local Authentication + JWT)
+### 1. Basic Setup (Normal Mode)
 
 ```typescript
 // app.module.ts
 import { Module } from '@nestjs/common';
-import { AuthModule } from 'nest‑authify';
+import { AuthModule } from 'nest-authify';
 import { UserRepository } from './repositories/user.repository';
 
 @Module({
   imports: [
     AuthModule.forRoot({
-      mode: 'monolith',
+      mode: 'normal', // Para aplicaciones monolíticas
       jwtSecret: process.env.JWT_SECRET,
-      jwtExpiresIn: '1h',
+      jwtExpiresIn: '60m',
       refreshExpiresIn: '7d',
       authRepository: UserRepository,
       strategies: {
@@ -74,40 +84,73 @@ import { UserRepository } from './repositories/user.repository';
 export class AppModule {}
 ```
 
-### 2. Create Auth Controller
+### 2. Implement Auth Repository
 
 ```typescript
-// auth.controller.ts
-import { Controller, Post, Body, UseGuards, Get } from '@nestjs/common';
-import { LocalAuthGuard, Auth, Public, CurrentUser } from 'nest‑authify';
+// user.repository.ts
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+import { IAuthRepository } from 'nest-authify';
+import { User } from './entities/user.entity';
 
-@Controller('auth')
-export class AuthController {
+@Injectable()
+export class UserRepository implements IAuthRepository {
   constructor(
-    @Inject('AUTH_SERVICE') private authService: any,
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
   ) {}
 
-  @Public()
-  @Post('login')
-  @UseGuards(LocalAuthGuard)
-  async login(@CurrentUser() user: any) {
-    return this.authService.createSession(user);
+  async findUserByUsername(username: string) {
+    return this.userRepo.findOne({
+      where: [{ username }, { email: username }],
+    });
   }
 
-  @Auth()
-  @Get('profile')
-  async getProfile(@CurrentUser() user: any) {
-    return user;
+  async findUserById(id: string) {
+    return this.userRepo.findOne({ where: { id } });
+  }
+
+  async findUserByProviderId(provider: string, providerId: string) {
+    return this.userRepo.findOne({ where: { provider, providerId } });
+  }
+
+  async createUser(data: any) {
+    const user = this.userRepo.create(data);
+    return this.userRepo.save(user);
+  }
+
+  async updateUser(id: string, data: any) {
+    await this.userRepo.update(id, data);
+    return this.findUserById(id);
   }
 }
 ```
 
-### 3. Protect Your Routes
+### 3. Use Built-in Controllers
+
+The package provides ready-to-use controllers:
+
+```typescript
+// No need to create controllers!
+// These endpoints are automatically available:
+
+// POST /auth/register
+// POST /auth/login
+// GET  /auth/profile
+// POST /auth/refresh
+// POST /auth/logout
+// POST /auth/logout-all
+// GET  /auth/verify
+// POST /auth/change-password
+```
+
+### 4. Use @Auth() Decorator
 
 ```typescript
 // users.controller.ts
 import { Controller, Get } from '@nestjs/common';
-import { Auth, Roles, CurrentUser } from 'nest‑authify';
+import { Auth, CurrentUser } from 'nest-authify';
 
 @Controller('users')
 export class UsersController {
@@ -131,28 +174,40 @@ export class UsersController {
   adminOnly() {
     return 'Admin only content';
   }
+
+  // Multiple roles
+  @Auth({ roles: ['admin', 'moderator'] })
+  @Get('moderation')
+  moderation() {
+    return 'Moderation panel';
+  }
+
+  // Permissions-based
+  @Auth({ permissions: ['posts:delete'] })
+  @Delete('posts/:id')
+  deletePost() {
+    return 'Post deleted';
+  }
 }
 ```
 
-## 📖 Documentation
+## 📖 Configuration Options
 
-### Configuration Options
-
-#### AuthModuleOptions
+### AuthModuleOptions
 
 ```typescript
 interface AuthModuleOptions {
-  // Basic configuration
-  jwtSecret: string;                    // JWT secret key
-  jwtExpiresIn?: string;               // Access token expiration (default: '60m')
-  refreshExpiresIn?: string;           // Refresh token expiration (default: '7d')
-  
-  // Architecture mode
-  mode: 'monolith' | 'microservice-server' | 'microservice-client';
-  
-  // Session store (optional)
+  // Modo de operación
+  mode: 'normal' | 'server' | 'client';
+
+  // Configuración JWT
+  jwtSecret: string;
+  jwtExpiresIn?: string; // default: '60m'
+  refreshExpiresIn?: string; // default: '7d'
+
+  // Session Store (opcional)
   sessionStore?: {
-    type: 'redis' | 'memory';
+    type: 'memory' | 'redis';
     redis?: {
       host: string;
       port: number;
@@ -161,29 +216,36 @@ interface AuthModuleOptions {
       keyPrefix?: string;
     };
   };
-  
-  // Custom service/repository
-  authService?: any;                   // Custom auth service class
-  authRepository?: any;                // Repository implementation
-  
-  // OAuth configuration
+
+  // Servicios personalizados
+  authService?: Type<any>; // Debe extender BaseAuthService
+  authRepository?: Type<any>; // Debe implementar IAuthRepository
+
+  // Hash personalizado
+  hashCallback?: (password: string) => Promise<string>;
+  hashVerifyCallback?: (password: string, hash: string) => Promise<boolean>;
+
+  // OAuth
   google?: {
     clientId: string;
     clientSecret: string;
     callbackUrl?: string;
+    scope?: string[];
   };
   facebook?: {
     clientId: string;
     clientSecret: string;
     callbackUrl?: string;
+    scope?: string[];
   };
   github?: {
     clientId: string;
     clientSecret: string;
     callbackUrl?: string;
+    scope?: string[];
   };
-  
-  // Strategies to enable
+
+  // Estrategias
   strategies?: {
     local?: boolean;
     jwt?: boolean;
@@ -191,341 +253,249 @@ interface AuthModuleOptions {
     facebook?: boolean;
     github?: boolean;
   };
+
+  // Controladores
+  enableControllers?: boolean; // default: true
+  controllersPrefix?: string; // default: 'auth'
+  enableSwagger?: boolean; // default: true
 }
 ```
 
-### Repository Interface
+## 🔧 Advanced Usage
 
-Implement `IAuthRepository` for your data source:
-
-```typescript
-import { IAuthRepository } from 'nest‑authify';
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from './entities/user.entity';
-
-@Injectable()
-export class UserRepository implements IAuthRepository {
-  constructor(
-    @InjectRepository(User)
-    private userRepo: Repository<User>,
-  ) {}
-
-  async findUserByUsername(username: string) {
-    return this.userRepo.findOne({ where: { username } });
-  }
-
-  async findUserById(id: string) {
-    return this.userRepo.findOne({ where: { id } });
-  }
-
-  async findUserByProviderId(provider: string, providerId: string) {
-    return this.userRepo.findOne({ where: { provider, providerId } });
-  }
-
-  async createUser(data: any) {
-    const user = this.userRepo.create(data);
-    return this.userRepo.save(user);
-  }
-
-  async updateUser(id: string, data: any) {
-    await this.userRepo.update(id, data);
-    return this.findUserById(id);
-  }
-}
-```
-
-## 🎯 Usage Examples
-
-### With Redis Sessions
+### Custom Hash Function
 
 ```typescript
-@Module({
-  imports: [
-    AuthModule.forRoot({
-      mode: 'monolith',
-      jwtSecret: process.env.JWT_SECRET,
-      authRepository: UserRepository,
-      
-      sessionStore: {
-        type: 'redis',
-        redis: {
-          host: 'localhost',
-          port: 6379,
-          password: process.env.REDIS_PASSWORD,
-          keyPrefix: 'auth:',
-        },
-      },
-      
-      strategies: {
-        local: true,
-        jwt: true,
-      },
-    }),
-  ],
-})
-export class AppModule {}
+import * as argon2 from 'argon2';
+
+AuthModule.forRoot({
+  // ... otras opciones
+  hashCallback: async (password: string) => {
+    return argon2.hash(password);
+  },
+  hashVerifyCallback: async (password: string, hash: string) => {
+    return argon2.verify(hash, password);
+  },
+}),
 ```
 
-### With OAuth (Google, Facebook, GitHub)
+### Redis Session Store
 
 ```typescript
-// app.module.ts
-@Module({
-  imports: [
-    AuthModule.forRoot({
-      mode: 'monolith',
-      jwtSecret: process.env.JWT_SECRET,
-      authRepository: UserRepository,
-      
-      google: {
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackUrl: 'http://localhost:3000/auth/google/callback',
-      },
-      
-      facebook: {
-        clientId: process.env.FACEBOOK_APP_ID,
-        clientSecret: process.env.FACEBOOK_APP_SECRET,
-        callbackUrl: 'http://localhost:3000/auth/facebook/callback',
-      },
-      
-      github: {
-        clientId: process.env.GITHUB_CLIENT_ID,
-        clientSecret: process.env.GITHUB_CLIENT_SECRET,
-        callbackUrl: 'http://localhost:3000/auth/github/callback',
-      },
-      
-      strategies: {
-        local: true,
-        jwt: true,
-        google: true,
-        facebook: true,
-        github: true,
-      },
-    }),
-  ],
-})
-export class AppModule {}
-
-// oauth.controller.ts
-import { Controller, Get, UseGuards, Res } from '@nestjs/common';
-import { GoogleAuthGuard, CurrentUser, Public } from 'nest‑authify';
-
-@Controller('auth')
-export class OAuthController {
-  constructor(
-    @Inject('AUTH_SERVICE') private authService: any,
-  ) {}
-
-  @Public()
-  @Get('google')
-  @UseGuards(GoogleAuthGuard)
-  async googleAuth() {}
-
-  @Public()
-  @Get('google/callback')
-  @UseGuards(GoogleAuthGuard)
-  async googleAuthCallback(@CurrentUser() user: any, @Res() res: Response) {
-    const session = await this.authService.createSession(user, {
-      provider: 'google',
-    });
-    
-    return res.redirect(
-      `${process.env.FRONTEND_URL}/auth/callback?token=${session.accessToken}`
-    );
-  }
-}
+AuthModule.forRoot({
+  mode: 'normal',
+  jwtSecret: process.env.JWT_SECRET,
+  authRepository: UserRepository,
+  sessionStore: {
+    type: 'redis',
+    redis: {
+      host: 'localhost',
+      port: 6379,
+      password: process.env.REDIS_PASSWORD,
+      keyPrefix: 'auth:',
+    },
+  },
+  strategies: {
+    local: true,
+    jwt: true,
+  },
+}),
 ```
+
+### OAuth Configuration
+
+```typescript
+AuthModule.forRoot({
+  mode: 'normal',
+  jwtSecret: process.env.JWT_SECRET,
+  authRepository: UserRepository,
+  google: {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackUrl: 'http://localhost:3000/auth/google/callback',
+  },
+  facebook: {
+    clientId: process.env.FACEBOOK_APP_ID,
+    clientSecret: process.env.FACEBOOK_APP_SECRET,
+    callbackUrl: 'http://localhost:3000/auth/facebook/callback',
+  },
+  github: {
+    clientId: process.env.GITHUB_CLIENT_ID,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET,
+    callbackUrl: 'http://localhost:3000/auth/github/callback',
+  },
+  strategies: {
+    local: true,
+    jwt: true,
+    google: true,
+    facebook: true,
+    github: true,
+  },
+}),
+```
+
+OAuth endpoints are automatically available:
+
+- `GET /auth/google` - Inicia flujo OAuth
+- `GET /auth/google/callback` - Callback de Google
+- `GET /auth/facebook` - Inicia flujo OAuth
+- `GET /auth/facebook/callback` - Callback de Facebook
+- `GET /auth/github` - Inicia flujo OAuth
+- `GET /auth/github/callback` - Callback de GitHub
 
 ### Custom Auth Service
 
-Extend `BaseAuthService` for custom logic:
-
 ```typescript
 import { Injectable } from '@nestjs/common';
-import { BaseAuthService } from 'nest‑authify';
-import * as bcrypt from 'bcrypt';
+import { BaseAuthService } from 'nest-authify';
 
 @Injectable()
 export class CustomAuthService extends BaseAuthService {
-  constructor(
-    jwtService: JwtService,
-    sessionStore: ISessionStore,
-    private usersService: UsersService,
-    private logService: LogService,
-  ) {
-    super(jwtService, sessionStore);
-  }
-
-  // Override to add logging
+  // Override para añadir logging
   async createSession(user: any, options?: any) {
-    await this.logService.info(`User login: ${user.id}`);
+    console.log(`User login: ${user.id}`);
     return super.createSession(user, options);
   }
 
-  // Implement validation with rate limiting
-  async validateUser(username: string, password: string) {
-    const user = await this.usersService.findByUsername(username);
-    
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      return null;
-    }
-    
-    const { password: _, ...result } = user;
-    return result;
-  }
-
+  // Implementación requerida
   protected async getUserById(userId: string) {
-    return this.usersService.findById(userId);
+    return this.repository.findUserById(userId);
   }
 
-  // Add custom methods
-  async changePassword(userId: string, oldPassword: string, newPassword: string) {
-    const user = await this.usersService.findById(userId);
-    
-    if (!(await bcrypt.compare(oldPassword, user.password))) {
-      throw new Error('Invalid old password');
-    }
-
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await this.usersService.update(userId, { password: hashedPassword });
-
-    // Revoke all user sessions
-    await this.revokeAllUserSessions(userId);
+  // Métodos personalizados
+  async sendWelcomeEmail(userId: string) {
+    // Tu lógica aquí
   }
 }
 
-// Use in module
-@Module({
-  imports: [
-    AuthModule.forRoot({
-      mode: 'monolith',
-      jwtSecret: process.env.JWT_SECRET,
-      authService: CustomAuthService, // Your custom service
-      strategies: {
-        local: true,
-        jwt: true,
-      },
-    }),
-  ],
-})
-export class AppModule {}
+// Usar en el módulo
+AuthModule.forRoot({
+  // ... otras opciones
+  authService: CustomAuthService,
+}),
 ```
 
-### Session Management
+### Extending AuthSession
 
 ```typescript
-import { Controller, Post, Get } from '@nestjs/common';
-import { Auth, SessionId, CurrentUser } from 'nest‑authify';
-
-@Controller('session')
-@Auth()
-export class SessionController {
-  constructor(
-    @Inject('AUTH_SERVICE') private authService: any,
-  ) {}
-
-  @Post('logout')
-  async logout(@SessionId() sessionId: string) {
-    await this.authService.revokeSession(sessionId);
-    return { message: 'Logged out successfully' };
-  }
-
-  @Post('logout-all')
-  async logoutAll(@CurrentUser('userId') userId: string) {
-    await this.authService.revokeAllUserSessions(userId);
-    return { message: 'All sessions revoked' };
+// Extender la interfaz AuthSession
+declare module 'nest-authify' {
+  interface AuthSession {
+    ipAddress?: string;
+    userAgent?: string;
+    deviceId?: string;
   }
 }
+
+// Usar en el servicio
+const session = await this.authService.createSession(user, {
+  metadata: {
+    ipAddress: req.ip,
+    userAgent: req.headers['user-agent'],
+    deviceId: req.headers['x-device-id'],
+  },
+});
 ```
 
-## 🎨 Decorators
+## 🏗️ Architecture Modes
+
+### Normal Mode (Monolithic)
+
+Complete authentication in a single application.
+
+```typescript
+AuthModule.forRoot({
+  mode: 'normal',
+  jwtSecret: process.env.JWT_SECRET,
+  authRepository: UserRepository,
+  strategies: { local: true, jwt: true },
+})
+```
+
+### Server Mode (Microservice Auth Server)
+
+Dedicated authentication microservice.
+
+```typescript
+// auth-service/app.module.ts
+AuthModule.forRoot({
+  mode: 'server',
+  jwtSecret: process.env.JWT_SECRET,
+  authRepository: UserRepository,
+  strategies: { local: true, jwt: true },
+})
+```
+
+### Client Mode (Microservice Client)
+
+Services that consume authentication.
+
+```typescript
+// orders-service/app.module.ts
+AuthModule.forRoot({
+  mode: 'client',
+  jwtSecret: process.env.JWT_SECRET, // Same secret as auth server
+  strategies: { jwt: true }, // Only JWT validation needed
+})
+```
+
+## 🎯 Decorators
 
 ### @Auth()
 
-Unified decorator for authentication and authorization:
+Unified decorator for authentication and authorization.
 
 ```typescript
-// Public route (no authentication)
+// Public route
 @Auth({ public: true })
 @Get('public')
 getPublic() {}
 
-// Authenticated users only
+// Requires authentication
 @Auth()
 @Get('protected')
 getProtected() {}
 
-// Specific roles required
+// Requires specific roles
 @Auth({ roles: ['admin'] })
 @Get('admin')
 adminOnly() {}
 
-// Multiple roles
-@Auth({ roles: ['admin', 'moderator'] })
-@Get('moderation')
-moderation() {}
+// Requires permissions
+@Auth({ permissions: ['posts:write'] })
+@Post('posts')
+createPost() {}
 
-// With custom guards
-@Auth({ guards: [ThrottlerGuard] })
-@Post('create')
-create() {}
-
-// Complex authorization
+// Combined with custom guards
 @Auth({ 
   roles: ['admin'], 
-  permissions: ['posts:delete'],
-  guards: [CustomAuditGuard]
+  permissions: ['users:delete'],
+  guards: [ThrottlerGuard]
 })
-@Delete(':id')
-delete() {}
-```
-
-### @Public()
-
-Shorthand for public routes:
-
-```typescript
-@Public()
-@Get('health')
-healthCheck() {
-  return { status: 'ok' };
-}
-```
-
-### @Roles()
-
-Shorthand for role-based authorization:
-
-```typescript
-@Roles('admin', 'moderator')
-@Get('admin')
-adminRoute() {}
+@Delete('users/:id')
+deleteUser() {}
 ```
 
 ### @CurrentUser()
 
-Extract user from request:
+Extracts user from request.
 
 ```typescript
-// Get entire user object
 @Get('profile')
 getProfile(@CurrentUser() user: any) {
   return user;
 }
 
-// Get specific property
+// Extract specific property
 @Get('id')
-getUserId(@CurrentUser('userId') userId: string) {
+getUserId(@CurrentUser('id') userId: string) {
   return { userId };
 }
 ```
 
 ### @SessionId()
 
-Extract session ID from JWT:
+Extracts session ID from JWT.
 
 ```typescript
 @Post('logout')
@@ -534,139 +504,138 @@ async logout(@SessionId() sessionId: string) {
 }
 ```
 
-## 🔒 Guards
-
-All guards are automatically configured and exported:
-
-- `JwtAuthGuard` - JWT authentication
-- `RolesGuard` - Role-based authorization
-- `LocalAuthGuard` - Local username/password
-- `GoogleAuthGuard` - Google OAuth
-- `FacebookAuthGuard` - Facebook OAuth
-- `GithubAuthGuard` - GitHub OAuth
+### Other Decorators
 
 ```typescript
-// Manual guard usage
+@IpAddress() // Get client IP
+@UserAgent() // Get User-Agent
+@GetRequest() // Get full request object
+```
+
+## 🛡️ Guards
+
+All guards are exported and can be used manually:
+
+```typescript
+import { 
+  JwtAuthGuard, 
+  RolesGuard, 
+  LocalAuthGuard,
+  GoogleAuthGuard,
+  FacebookAuthGuard,
+  GithubAuthGuard,
+  PermissionsGuard 
+} from 'nest-authify';
+
 @UseGuards(JwtAuthGuard, RolesGuard)
 @Get('protected')
 protectedRoute() {}
-
-// With OAuth
-@UseGuards(GoogleAuthGuard)
-@Get('google')
-googleAuth() {}
 ```
 
-## 🏗️ Microservices Architecture
+## 📝 Environment Variables
 
-### Authentication Microservice (Server)
+Create a `.env` file:
 
-```typescript
-// main.ts
-import { NestFactory } from '@nestjs/core';
-import { Transport } from '@nestjs/microservices';
+```env
+# JWT Configuration
+JWT_SECRET=your-super-secret-jwt-key
+JWT_EXPIRES_IN=60m
+REFRESH_EXPIRES_IN=7d
 
-async function bootstrap() {
-  const app = await NestFactory.createMicroservice(AppModule, {
-    transport: Transport.TCP,
-    options: {
-      host: '0.0.0.0',
-      port: 3001,
-    },
-  });
-  await app.listen();
-}
-bootstrap();
+# Redis (optional)
+REDIS_HOST=localhost
+REDIS_PORT=6379
+REDIS_PASSWORD=your-redis-password
+REDIS_DB=0
+REDIS_KEY_PREFIX=auth:
 
-// app.module.ts
-@Module({
-  imports: [
-    AuthModule.forRoot({
-      mode: 'microservice-server',
-      jwtSecret: process.env.JWT_SECRET,
-      authRepository: UserRepository,
-    }),
-  ],
-})
-export class AppModule {}
+# Google OAuth (optional)
+GOOGLE_CLIENT_ID=your-google-client-id
+GOOGLE_CLIENT_SECRET=your-google-client-secret
+GOOGLE_CALLBACK_URL=http://localhost:3000/auth/google/callback
+
+# Facebook OAuth (optional)
+FACEBOOK_APP_ID=your-facebook-app-id
+FACEBOOK_APP_SECRET=your-facebook-app-secret
+FACEBOOK_CALLBACK_URL=http://localhost:3000/auth/facebook/callback
+
+# GitHub OAuth (optional)
+GITHUB_CLIENT_ID=your-github-client-id
+GITHUB_CLIENT_SECRET=your-github-client-secret
+GITHUB_CALLBACK_URL=http://localhost:3000/auth/github/callback
+
+# Frontend URL (for OAuth redirects)
+FRONTEND_URL=http://localhost:4200
 ```
 
-### Client Microservice
+## 🔌 Async Configuration
+
+For dynamic configuration:
 
 ```typescript
-// orders.module.ts
-import { Module } from '@nestjs/common';
-import { AuthModule } from 'nest‑authify';
-import { Transport } from '@nestjs/microservices';
+import { ConfigService } from '@nestjs/config';
 
-@Module({
-  imports: [
-    AuthModule.forRoot({
-      mode: 'microservice-client',
-      jwtSecret: process.env.JWT_SECRET,
-      microserviceOptions: {
-        transport: Transport.TCP,
-        options: {
-          host: 'auth-service',
-          port: 3001,
-        },
+AuthModule.forRootAsync({
+  imports: [ConfigModule],
+  useFactory: async (configService: ConfigService) => ({
+    mode: 'normal',
+    jwtSecret: configService.get('JWT_SECRET'),
+    jwtExpiresIn: configService.get('JWT_EXPIRES_IN', '60m'),
+    refreshExpiresIn: configService.get('REFRESH_EXPIRES_IN', '7d'),
+    authRepository: UserRepository,
+    sessionStore: configService.get('REDIS_HOST') ? {
+      type: 'redis',
+      redis: {
+        host: configService.get('REDIS_HOST'),
+        port: configService.get('REDIS_PORT'),
+        password: configService.get('REDIS_PASSWORD'),
       },
-    }),
-  ],
-})
-export class OrdersModule {}
-
-// orders.controller.ts
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { MicroserviceJwtAuthGuard, CurrentUser } from 'nest‑authify';
-
-@Controller('orders')
-@UseGuards(MicroserviceJwtAuthGuard)
-export class OrdersController {
-  @Get()
-  async getOrders(@CurrentUser() user: any) {
-    return `Orders for user ${user.userId}`;
-  }
-}
+    } : undefined,
+    strategies: {
+      local: true,
+      jwt: true,
+      google: !!configService.get('GOOGLE_CLIENT_ID'),
+      facebook: !!configService.get('FACEBOOK_APP_ID'),
+      github: !!configService.get('GITHUB_CLIENT_ID'),
+    },
+  }),
+  inject: [ConfigService],
+}),
 ```
 
-## 📝 API Reference
+## 📚 API Reference
 
 ### BaseAuthService
 
-Core methods available when extending `BaseAuthService`:
+Base service that can be extended:
 
 ```typescript
 class BaseAuthService {
-  // Create JWT access token
+  // JWT Methods
   createJwt(user: any, expiresIn?: string, sessionId?: string): Promise<string>
-  
-  // Create refresh token
   createRefreshToken(user: any, expiresIn?: string, sessionId?: string): Promise<string>
-  
-  // Create complete session
-  createSession(user: any, options?: any): Promise<AuthSession>
-  
-  // Verify and decode token
   verifyToken(token: string): Promise<JwtPayload>
   
-  // Refresh access token
-  refreshAccessToken(refreshToken: string): Promise<{ accessToken: string }>
-  
-  // Revoke specific session
+  // Session Methods
+  createSession(user: any, options?: CreateSessionOptions): Promise<AuthSession>
+  refreshAccessToken(refreshToken: string): Promise<{ accessToken: string; expiresIn: number }>
   revokeSession(sessionId: string): Promise<void>
-  
-  // Revoke all user sessions
   revokeAllUserSessions(userId: string): Promise<void>
   
-  // Must implement
+  // User Methods
+  register(data: RegisterUserDto): Promise<any>
+  validateUser(username: string, password: string): Promise<ValidatedUser | null>
+  validateOAuthUser(provider: string, providerId: string, profile: any): Promise<any>
+  changePassword(userId: string, oldPassword: string, newPassword: string): Promise<void>
+  
+  // Abstract Methods (must implement)
   protected abstract getUserById(userId: string): Promise<any>
 }
 ```
 
 ### IAuthRepository
 
-Interface to implement for data persistence:
+Interface to implement for your data layer:
 
 ```typescript
 interface IAuthRepository {
@@ -675,6 +644,9 @@ interface IAuthRepository {
   findUserByProviderId(provider: string, providerId: string): Promise<any>
   createUser(data: any): Promise<any>
   updateUser(id: string, data: any): Promise<any>
+  deleteUser?(id: string): Promise<void>
+  findUsersByRole?(role: string): Promise<any[]>
+  findActiveUsers?(): Promise<any[]>
 }
 ```
 
@@ -688,6 +660,8 @@ interface ISessionStore {
   get(key: string): Promise<any>
   delete(key: string): Promise<void>
   exists(key: string): Promise<boolean>
+  keys(pattern?: string): Promise<string[]>
+  clear(): Promise<void>
 }
 ```
 
@@ -697,8 +671,7 @@ Example test setup:
 
 ```typescript
 import { Test, TestingModule } from '@nestjs/testing';
-import { JwtModule } from '@nestjs/jwt';
-import { AuthModule } from 'nest‑authify';
+import { AuthModule, AUTH_SERVICE } from 'nest-authify';
 
 describe('AuthService', () => {
   let service: any;
@@ -706,22 +679,16 @@ describe('AuthService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       imports: [
-        JwtModule.register({
-          secret: 'test-secret',
-        }),
         AuthModule.forRoot({
-          mode: 'monolith',
+          mode: 'normal',
           jwtSecret: 'test-secret',
           authRepository: MockUserRepository,
-          strategies: {
-            local: true,
-            jwt: true,
-          },
+          strategies: { local: true, jwt: true },
         }),
       ],
     }).compile();
 
-    service = module.get('AUTH_SERVICE');
+    service = module.get(AUTH_SERVICE);
   });
 
   it('should create a session', async () => {
@@ -735,34 +702,42 @@ describe('AuthService', () => {
 });
 ```
 
-## 🔧 Environment Variables
+## 📊 Swagger Integration
 
-```env
-# JWT Configuration
-JWT_SECRET=your-super-secret-jwt-key
-JWT_EXPIRES_IN=60m
-REFRESH_EXPIRES_IN=7d
+The package automatically integrates with Swagger:
 
-# Redis (optional)
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=your-redis-password
+```typescript
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
-# Google OAuth (optional)
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
+// In main.ts
+const config = new DocumentBuilder()
+  .setTitle('API Documentation')
+  .setDescription('API with nest-authify')
+  .setVersion('1.0')
+  .addBearerAuth() // Add this for JWT
+  .build();
 
-# Facebook OAuth (optional)
-FACEBOOK_APP_ID=your-facebook-app-id
-FACEBOOK_APP_SECRET=your-facebook-app-secret
-
-# GitHub OAuth (optional)
-GITHUB_CLIENT_ID=your-github-client-id
-GITHUB_CLIENT_SECRET=your-github-client-secret
-
-# Frontend URL (for OAuth callbacks)
-FRONTEND_URL=http://localhost:4200
+const document = SwaggerModule.createDocument(app, config);
+SwaggerModule.setup('api', app, document);
 ```
+
+All auth endpoints are automatically documented with:
+
+- Request/Response DTOs
+- Authentication requirements
+- Error responses
+- Example values
+
+## 🔒 Security Best Practices
+
+1. **Strong JWT Secrets**: Use long, random strings
+2. **Short Token Expiration**: Keep access tokens short-lived (15-60 minutes)
+3. **Refresh Token Rotation**: Implement refresh token rotation for better security
+4. **HTTPS Only**: Always use HTTPS in production
+5. **Rate Limiting**: Implement rate limiting on auth endpoints
+6. **Password Strength**: Validate password strength on registration
+7. **Session Revocation**: Implement session revocation for logout
+8. **Audit Logging**: Log authentication events
 
 ## 🤝 Contributing
 
@@ -770,7 +745,7 @@ Contributions are welcome! Please follow these steps:
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
@@ -781,27 +756,28 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🙏 Acknowledgments
 
 - Built with [NestJS](https://nestjs.com/)
-- Authentication strategies powered by [Passport](http://www.passportjs.org/)
+- Authentication powered by [Passport](http://www.passportjs.org/)
 - JWT handling by [@nestjs/jwt](https://github.com/nestjs/jwt)
 
-## 📞 Support
+## 📧 Support
 
 - 📧 Email: <uncompadev@gmail.com>
-- 🐛 Issues: [GitHub Issues](https://github.com/UnCompa/nest‑authify/issues)
-- 💬 Discussions: [GitHub Discussions](https://github.com/UnCompa/nest‑authify/discussions)
+- 🐛 Issues: [GitHub Issues](https://github.com/UnCompa/nest-authify/issues)
+- 💬 Discussions: [GitHub Discussions](https://github.com/UnCompa/nest-authify/discussions)
 
 ## 🗺️ Roadmap
 
-- [ ] Add support for more OAuth providers (Apple, LinkedIn, Twitter)
-- [ ] Implement permission-based authorization system
-- [ ] Add support for RBAC (Role-Based Access Control)
-- [ ] GraphQL integration
-- [ ] WebSocket authentication support
+- [ ] Support for more OAuth providers (Apple, LinkedIn, Twitter)
+- [ ] Permission-based authorization system (CASL integration)
 - [ ] Two-Factor Authentication (2FA)
 - [ ] Magic link authentication
+- [ ] WebSocket authentication support
+- [ ] GraphQL integration
 - [ ] Rate limiting integration
 - [ ] Audit logging
 - [ ] Admin dashboard for session management
+- [ ] Multi-tenancy support
+- [ ] Biometric authentication support
 
 ---
 

@@ -1,38 +1,67 @@
-import { PassportStrategy } from '@nestjs/passport';
-import { Strategy, Profile } from 'passport-facebook';
-import { Injectable, Inject, UnauthorizedException } from '@nestjs/common';
-import { IAuthService } from '../core/interfaces/auth-service.interface';
-import { ProvidersAuth } from '../core/types/auth-session.interface';
+// src/strategies/facebook.strategy.ts
+
+import { Injectable } from '@nestjs/common';
+import { Profile } from 'passport-facebook';
+import { FacebookOAuthConfig } from '../interfaces/auth-options.interface';
+import { BaseAuthService } from '../services/base-auth.service';
 
 @Injectable()
-export class FacebookStrategy extends PassportStrategy(Strategy, 'facebook') {
+export class FacebookStrategy {
+  private strategy: any;
+
   constructor(
-    @Inject('AUTH_CONFIG') private config: any,
-    @Inject('AUTH_SERVICE') private authService: IAuthService,
+    private readonly authService: BaseAuthService,
+    private readonly config: FacebookOAuthConfig,
   ) {
-    super({
-      clientID: config.facebook?.clientId,
-      clientSecret: config.facebook?.clientSecret,
-      callbackURL: config.facebook?.callbackUrl || 'http://localhost:3000/auth/facebook/callback',
-      scope: ['email'],
-      profileFields: ['emails', 'name', 'photos'],
-    });
+    this.init();
   }
 
-  async validate(
-    accessToken: string,
-    refreshToken: string,
-    profile: Profile,
-    done: (err: any, user: any, info?: any) => void,
-  ): Promise<any> {
+  private async init() {
     try {
-      if (!this.authService || typeof this.authService.validateOAuthUser !== 'function') {
-        throw new UnauthorizedException('Authentication service unavailable');
+      const { Strategy } = await import('passport-facebook');
+
+      this.strategy = new Strategy(
+        {
+          clientID: this.config.clientId,
+          clientSecret: this.config.clientSecret,
+          callbackURL: this.config.callbackUrl || 'http://localhost:3000/auth/facebook/callback',
+          scope: this.config.scope || ['email'],
+          profileFields: this.config.profileFields || ['id', 'emails', 'name', 'photos'],
+        },
+        async (accessToken: string, refreshToken: string, profile: Profile, done: any) => {
+          try {
+            const { id, name, emails, photos } = profile;
+            const user = await this.authService.validateOAuthUser('facebook', id, {
+              email: emails?.[0]?.value,
+              username: emails?.[0]?.value || `facebook_${id}`,
+              displayName: `${name?.givenName} ${name?.familyName}`,
+              photo: photos?.[0]?.value,
+            });
+            done(null, user);
+          } catch (err) {
+            done(err);
+          }
+        },
+      );
+
+      // Registrar dinámicamente en Passport
+      const passport = (await import('passport')).default || (await import('passport'));
+      passport.use('facebook', this.strategy);
+    } catch (err: any) {
+      if (err.code === 'MODULE_NOT_FOUND') {
+        console.warn('passport-facebook no está instalado. Estrategia Facebook desactivada.');
+      } else {
+        console.error('Error cargando estrategia Facebook:', err);
       }
-      const user = await this.authService.validateOAuthUser(profile, ProvidersAuth.FACEBOOK);
-      done(null, user);
-    } catch (error) {
-      done(error, false);
+      this.strategy = null;
     }
+  }
+
+  getStrategy() {
+    return this.strategy;
+  }
+
+  isEnabled(): boolean {
+    return this.strategy !== null;
   }
 }

@@ -1,6 +1,8 @@
-import { Auth } from './auth.decorator';
+import { SetMetadata } from '@nestjs/common';
+
+export const IS_PUBLIC_KEY = 'isPublic';
 
 /**
- * Marca una ruta como pública (sin autenticación requerida)
+ * Marca una ruta como pública (no requiere autenticación)
  */
-export const Public = () => Auth({ public: true });
+export const Public = () => SetMetadata(IS_PUBLIC_KEY, true);

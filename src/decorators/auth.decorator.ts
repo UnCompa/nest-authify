@@ -1,12 +1,13 @@
-import { SetMetadata, UseGuards, applyDecorators } from '@nestjs/common';
+import { applyDecorators, UseGuards, Type } from '@nestjs/common';
+import { ApiBearerAuth, ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../guards/jwt-auth.guard';
 import { RolesGuard } from '../guards/roles.guard';
+import { PermissionsGuard } from '../guards/permissions.guard';
+import { Public } from './public.decorator';
+import { Roles } from './roles.decorator';
+import { Permissions } from './permissions.decorator';
 
-export const IS_PUBLIC_KEY = 'isPublic';
-export const ROLES_KEY = 'roles';
-export const PERMISSIONS_KEY = 'permissions';
-
-export interface AuthDecoratorOptions {
+export interface AuthOptions {
   /**
    * Si es true, la ruta es pública y no requiere autenticación
    */
@@ -25,54 +26,79 @@ export interface AuthDecoratorOptions {
   /**
    * Guards adicionales a aplicar
    */
-  guards?: any[];
+  guards?: Type<any>[];
+
+  /**
+   * Habilitar documentación Swagger
+   * @default true
+   */
+  swagger?: boolean;
 }
 
 /**
  * Decorador unificado para autenticación y autorización
+ * Combina guards, roles, permisos y documentación Swagger
  * 
  * @example
  * // Ruta pública
  * @Auth({ public: true })
  * 
  * @example
- * // Solo usuarios autenticados
+ * // Requiere autenticación
  * @Auth()
  * 
  * @example
- * // Solo admins
- * @Auth({ roles: ['admin'] })
+ * // Requiere roles específicos
+ * @Auth({ roles: ['admin', 'moderator'] })
  * 
  * @example
- * // Admins o moderadores con permisos específicos
+ * // Requiere permisos específicos
+ * @Auth({ permissions: ['posts:write', 'posts:delete'] })
+ * 
+ * @example
+ * // Combinación de roles, permisos y guards personalizados
  * @Auth({ 
- *   roles: ['admin', 'moderator'],
- *   permissions: ['posts:write']
+ *   roles: ['admin'], 
+ *   permissions: ['users:delete'],
+ *   guards: [ThrottlerGuard]
  * })
  */
-export function Auth(options: AuthDecoratorOptions = {}) {
-  const {
-    public: isPublic = false,
-    roles = [],
-    permissions = [],
-    guards = [],
-  } = options;
+export function Auth(options: AuthOptions = {}): MethodDecorator {
+  const decorators: (ClassDecorator | MethodDecorator | PropertyDecorator)[] = [];
 
-  const metadataDecorators = [
-    SetMetadata(IS_PUBLIC_KEY, isPublic),
-    SetMetadata(ROLES_KEY, roles),
-    SetMetadata(PERMISSIONS_KEY, permissions),
-  ];
-
-  // Si es público, solo metadata
-  if (isPublic) {
-    return applyDecorators(...metadataDecorators);
+  // Si es público, solo marcar como público
+  if (options.public) {
+    decorators.push(Public());
+    return applyDecorators(...decorators);
   }
 
-  // Si no es público: metadata + guards
-  const guardDecorators = guards.length > 0
-    ? UseGuards(JwtAuthGuard, RolesGuard, ...guards)
-    : UseGuards(JwtAuthGuard, RolesGuard);
+  // Añadir guards básicos
+  const guards: Type<any>[] = [JwtAuthGuard, RolesGuard, PermissionsGuard];
 
-  return applyDecorators(...metadataDecorators, guardDecorators);
+  // Añadir guards personalizados
+  if (options.guards && options.guards.length > 0) {
+    guards.push(...options.guards);
+  }
+
+  decorators.push(UseGuards(...guards));
+
+  // Añadir roles si están definidos
+  if (options.roles && options.roles.length > 0) {
+    decorators.push(Roles(...options.roles));
+  }
+
+  // Añadir permisos si están definidos
+  if (options.permissions && options.permissions.length > 0) {
+    decorators.push(Permissions(...options.permissions));
+  }
+
+  // Añadir documentación Swagger por defecto
+  if (options.swagger !== false) {
+    decorators.push(
+      ApiBearerAuth(),
+      ApiUnauthorizedResponse({ description: 'Unauthorized' }),
+    );
+  }
+
+  return applyDecorators(...decorators);
 }
