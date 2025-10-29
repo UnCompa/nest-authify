@@ -1,6 +1,6 @@
 {
   "name": "nest-authify",
-  "version": "2.0.0",
+  "version": "1.1.0",
   "description": "Complete authentication and authorization package for NestJS - Monolith and Microservices ready with OAuth, JWT, Redis sessions",
   "author": "UnCompa <uncompadev@gmail.com>",
   "license": "MIT",
